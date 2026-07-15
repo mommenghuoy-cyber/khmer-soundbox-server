@@ -114,14 +114,16 @@ def check_status():
         return jsonify({"has_new": True})
     return jsonify({"has_new": False})
 
+async def start_telegram_async():
+    await client.start(phone=PHONE)
+    await client.run_until_disconnected()
+
 def start_telegram():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(client.start(phone=PHONE))
-    loop.run_until_complete(client.run_until_disconnected())
+    loop.run_until_complete(start_telegram_async())
 
 import threading
 threading.Thread(target=start_telegram, daemon=True).start()
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
