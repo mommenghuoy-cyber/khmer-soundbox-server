@@ -80,7 +80,7 @@ async def generate_audio(text):
     has_new_audio = True
 
 # ប្រព័ន្ធរត់ Telegram Client ក្នុង Background
-client = TelegramClient("soundbox_session", API_ID, API_HASH)
+client = TelegramClient("khmer_tts_session", API_ID, API_HASH)
 
 @client.on(events.NewMessage)
 async def handler(event):
