@@ -1,0 +1,4 @@
+telethon
+edge-tts
+flask
+gunicorn
