@@ -8,22 +8,12 @@ import re
 # ==================== CONFIGURATION ====================
 API_ID = 23963495
 API_HASH = "80f834927d63945ca3a8863fba8eef49"
-PHONE = "+85593883311"
 
-# ឈ្មោះ Chat Telegram
-ONLY_FROM_CHATS = []
-
-# Keywords សម្រាប់ចាប់សារប្រាក់ចូល
-RECEIVE_KEYWORDS = ["ត្រូវបានបង់ដោយ", "ទទួលបានប្រាក់", "paid by", "received"]
-
-# Audio Settings
 VOICE = "km-KH-PisethNeural"
 LATEST_AUDIO_FILE = "latest_audio.mp3"
 
 app = Flask(__name__)
 client = TelegramClient("khmer_tts_session", API_ID, API_HASH)
-
-has_new_audio = False
 
 def khmer_number_to_words(num_str):
     khmer_digits = {'0': 'សូន្យ', '1': 'មួយ', '2': 'ពីរ', '3': 'បី', '4': 'បួន',
@@ -50,47 +40,47 @@ def format_amount_for_speech(raw_amount: str) -> str:
     except ValueError:
         return f"{num_str} រៀល"
 
-# 💡 កូដបង្កើតសំឡេងទំហំតូចខ្លាំង សម្រាប់ ESP32 (កុំឲ្យអស់ RAM)
 async def generate_audio(text):
-    global has_new_audio
     if os.path.exists(LATEST_AUDIO_FILE):
         try:
-            os.remove(LATEST_AUDIO_FILE) # លុប File ចាស់ចោល
+            os.remove(LATEST_AUDIO_FILE)
         except:
             pass
-    communicate = edge_tts.Communicate(text, VOICE, rate="+15%", pitch="+0Hz")
+    communicate = edge_tts.Communicate(text, VOICE, rate="+10%", pitch="+0Hz")
     await communicate.save(LATEST_AUDIO_FILE)
-    has_new_audio = True
+    print(f"✅ បានបង្កើត File សំឡេងរួចរាល់: {text}")
 
+# 💡 ចាប់គ្រប់សារទាំងអស់ដែលផ្ញើចូល Telegram 
 @client.on(events.NewMessage)
 async def handler(event):
     text = event.raw_text
+    print(f"📩 ទទួលបានសារថ្មីពី Telegram: {text}")
+    
     if not text or not text.strip():
         return
-    chat = await event.get_chat()
-    chat_name = getattr(chat, 'title', None) or getattr(chat, 'username', None) or ""
-    if ONLY_FROM_CHATS and not any(name.lower() in chat_name.lower() for name in ONLY_FROM_CHATS):
-        return
-    if not any(k.lower() in text.lower() for k in RECEIVE_KEYWORDS):
-        return
     
+    # ស្វែងរកលេខប្រាក់
     AMOUNT_PATTERN = re.compile(r'(\d[\d,]*\.?\d*)')
     amounts = AMOUNT_PATTERN.findall(text)
     if not amounts:
         return
+        
     amount_text = " និង ".join([format_amount_for_speech(a) for a in amounts])
-    
     await generate_audio(f"ទទួលបាន {amount_text}")
+
+@app.route('/')
+def home():
+    return "Server is Running!"
 
 @app.route('/latest-audio')
 def get_latest_audio():
-    global has_new_audio
     if os.path.exists(LATEST_AUDIO_FILE):
         return send_from_directory('.', LATEST_AUDIO_FILE)
     return jsonify({"status": "no audio"}), 404
 
 async def start_telegram_async():
-    await client.start(phone=PHONE)
+    await client.start()
+    print("🤖 Telegram Bot Started Listening...")
     await client.run_until_disconnected()
 
 def start_telegram():
