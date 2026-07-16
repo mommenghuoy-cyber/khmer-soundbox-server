@@ -75,7 +75,8 @@ def format_amount_for_speech(raw_amount: str) -> str:
 
 async def generate_audio(text):
     global has_new_audio
-    communicate = edge_tts.Communicate(text, VOICE)
+    # កំណត់ឲ្យបង្កើតសំឡេងទំហំតូចស្តើង (Low Rate/Pitch) កុំឲ្យធ្ងន់ RAM លើ ESP32
+    communicate = edge_tts.Communicate(text, VOICE, rate="-10%", pitch="+0Hz")
     await communicate.save(LATEST_AUDIO_FILE)
     has_new_audio = True
 
