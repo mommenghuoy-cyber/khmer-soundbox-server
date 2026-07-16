@@ -1,19 +1,13 @@
 import os
-import asyncio
-from flask import Flask, send_from_directory, jsonify
-from telethon import TelegramClient, events
+from flask import Flask, request, send_from_directory, jsonify
 import edge_tts
+import asyncio
 import re
 
-# ==================== CONFIGURATION ====================
-API_ID = 23963495
-API_HASH = "80f834927d63945ca3a8863fba8eef49"
+app = Flask(__name__)
 
 VOICE = "km-KH-PisethNeural"
 LATEST_AUDIO_FILE = "latest_audio.mp3"
-
-app = Flask(__name__)
-client = TelegramClient("khmer_tts_session", API_ID, API_HASH)
 
 def khmer_number_to_words(num_str):
     khmer_digits = {'0': 'សូន្យ', '1': 'មួយ', '2': 'ពីរ', '3': 'បី', '4': 'បួន',
@@ -40,7 +34,7 @@ def format_amount_for_speech(raw_amount: str) -> str:
     except ValueError:
         return f"{num_str} រៀល"
 
-async def generate_audio(text):
+async def generate_audio_async(text):
     if os.path.exists(LATEST_AUDIO_FILE):
         try:
             os.remove(LATEST_AUDIO_FILE)
@@ -48,48 +42,41 @@ async def generate_audio(text):
             pass
     communicate = edge_tts.Communicate(text, VOICE, rate="+10%", pitch="+0Hz")
     await communicate.save(LATEST_AUDIO_FILE)
-    print(f"✅ បានបង្កើត File សំឡេងរួចរាល់: {text}")
-
-# 💡 ចាប់គ្រប់សារទាំងអស់ដែលផ្ញើចូល Telegram 
-@client.on(events.NewMessage)
-async def handler(event):
-    text = event.raw_text
-    print(f"📩 ទទួលបានសារថ្មីពី Telegram: {text}")
-    
-    if not text or not text.strip():
-        return
-    
-    # ស្វែងរកលេខប្រាក់
-    AMOUNT_PATTERN = re.compile(r'(\d[\d,]*\.?\d*)')
-    amounts = AMOUNT_PATTERN.findall(text)
-    if not amounts:
-        return
-        
-    amount_text = " និង ".join([format_amount_for_speech(a) for a in amounts])
-    await generate_audio(f"ទទួលបាន {amount_text}")
 
 @app.route('/')
 def home():
-    return "Server is Running!"
+    return "Server Soundbox is Online!"
+
+# 💡 API សម្រាប់ទទួលសារពី Telegram Bot
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.get_json()
+    print("📩 ទទួលបានទិន្នន័យ:", data)
+    
+    message_text = ""
+    if data and 'message' in data and 'text' in data['message']:
+        message_text = data['message']['text']
+    elif data and 'channel_post' in data and 'text' in data['channel_post']:
+        message_text = data['channel_post']['text']
+        
+    if message_text:
+        AMOUNT_PATTERN = re.compile(r'(\d[\d,]*\.?\d*)')
+        amounts = AMOUNT_PATTERN.findall(message_text)
+        if amounts:
+            amount_text = " និង ".join([format_amount_for_speech(a) for a in amounts])
+            speech_text = f"ទទួលបាន {amount_text}"
+            
+            # បង្កើត File សំឡេង
+            asyncio.run(generate_audio_async(speech_text))
+            print(f"✅ បង្កើតសំឡេងរួចរាល់: {speech_text}")
+            
+    return jsonify({"status": "success"}), 200
 
 @app.route('/latest-audio')
 def get_latest_audio():
     if os.path.exists(LATEST_AUDIO_FILE):
         return send_from_directory('.', LATEST_AUDIO_FILE)
     return jsonify({"status": "no audio"}), 404
-
-async def start_telegram_async():
-    await client.start()
-    print("🤖 Telegram Bot Started Listening...")
-    await client.run_until_disconnected()
-
-def start_telegram():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_telegram_async())
-
-import threading
-threading.Thread(target=start_telegram, daemon=True).start()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
